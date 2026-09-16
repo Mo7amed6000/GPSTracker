@@ -1,0 +1,203 @@
+<!-- gps.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realtime location tracker</title>
+
+    <!-- leaflet css  -->
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'leaflet/leaflet.css' %}" />
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            width: 100%;
+            height: 100vh;
+        }
+
+        .leaflet-bar button {
+            background-color: white;
+            border: none;
+            padding: 5px;
+            cursor: pointer;
+        }
+
+        .leaflet-bar button:hover {
+            background-color: #f4f4f4;
+        }
+
+        .status-indicator {
+            padding: 5px 10px;
+            background: #f8f8f8;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+            font-family: Arial, sans-serif;
+        }
+
+        .status-indicator.online {
+            color: green;
+        }
+
+        .status-indicator.offline {
+            color: red;
+        }
+
+        .info {
+            padding: 6px 8px;
+            font: 14px/16px Arial, Helvetica, sans-serif;
+            background: white;
+            background: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+</body>
+
+</html>
+
+<!-- leaflet js  -->
+<script src="{% static 'leaflet/leaflet.js' %}" type="text/javascript"></script>
+<script>
+    let uri = "ws://localhost:8001/"
+    var map = L.map('map').setView([36.7538, 3.1588], 12);
+    var osm = L.tileLayer(uri + 'tracker/tiles/{z}/{x}/{y}.png', {
+        maxZoom: 16
+    });
+    osm.on('tileerror', function (error) {
+        // console.log('the tile: ' + error.tile.src + " does not exist yet...");
+    });
+    osm.addTo(map);
+    L.control.scale({
+        maxWidth: 500,
+        imperial: false,
+    }).addTo(map);
+    // Create a custom control for speed and altitude
+    var info = L.control();
+
+    const StatusControl = L.Control.extend({
+        onAdd: function (map) {
+            const div = L.DomUtil.create('div', 'status-indicator');
+            div.innerHTML = 'Checking connection...';
+            return div;
+        }
+    });
+
+    // Add the custom control to the map
+    const statusControl = new StatusControl({ position: 'topright' });
+    map.addControl(statusControl);
+
+
+    var pathCoordinates = []
+    var marker, circle, polyline;
+    var delay = 5;
+
+    const socket = new WebSocket(uri + 'ws/location/');
+
+    socket.onmessage = function (event) {
+        const data = JSON.parse(event.data);
+
+        var lat = data.latitude;
+        var long = data.longitude;
+        var alt = data.altitude;
+        var spd = data.speed;
+
+        if (marker) {
+            map.removeLayer(marker);
+        }
+
+        if (polyline) {
+            map.removeLayer(polyline);
+        }
+
+        delay = 0;
+
+        pathCoordinates.push([lat, long]);
+        polyline = L.polyline(pathCoordinates).addTo(map);
+        marker = L.marker([lat, long]);
+        circle = L.circle([lat, long], { radius: 1 });
+        info.update({ speed: spd, altitude: alt });
+        marker.bindPopup(alt);
+        var featureGroup = L.featureGroup([circle, marker]).addTo(map);
+        console.log("Your coordinate is: Lat: " + lat + " Long: " + long + " Alt: " + alt);
+    };
+
+    var customControl = L.Control.extend({
+        options: {
+            position: 'topleft'
+        },
+        onAdd: function (map) {
+            var container = L.DomUtil.create('div', 'leaflet-bar');
+
+            button1 = L.DomUtil.create('button', 'addButton', container);
+            button1.innerHTML = 'Copy';
+            button1.onclick = function () {
+                clipboarding();
+            };
+
+            return container;
+        }
+    });
+    map.addControl(new customControl());
+
+    info.onAdd = function (map) {
+        this._div = L.DomUtil.create('div', 'info'); // Create a div with a class "info"
+        this.update();
+        return this._div;
+    };
+
+    // Method to update the control based on feature properties
+    info.update = function (props) {
+        this._div.innerHTML = '<b>Speed:</b> ' + (props ? props.speed : 'N/A') + ' km/h<br />' +
+            '<b>Altitude:</b> ' + (props ? props.altitude : 'N/A') + ' meters';
+    };
+
+    info.addTo(map);
+
+    // var speed = 60; // in km/h
+    // var altitude = 1500; // in meters
+
+    //info.update({ speed: speed, altitude: altitude });
+
+
+    function clipboarding() {
+        var copyText = "";
+        pathCoordinates.forEach(element => {
+            copyText += element[0] + "," + element[1] + " \n"
+        });
+        navigator.clipboard.writeText(copyText);
+        alert("Copied the text: " + copyText);
+    }
+
+
+
+    function updateStatus() {
+        const statusDiv = document.querySelector('.status-indicator');
+        if (delay <= 5) {
+            statusDiv.innerHTML = 'Online';
+            statusDiv.classList.remove('offline');
+            statusDiv.classList.add('online');
+        } else {
+            statusDiv.innerHTML = 'Offline';
+            statusDiv.classList.remove('online');
+            statusDiv.classList.add('offline');
+        }
+    }
+    setInterval(() => {
+        delay += 1;
+        console.log("checking internet....");
+        updateStatus();
+    }, 1000);
+
+</script>
