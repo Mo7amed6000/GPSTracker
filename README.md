@@ -135,9 +135,11 @@ You can copy a live trail from the tracker page (**Copy**) and paste it here.
 - WebSocket path: `ws://<host>:8001/ws/location/`
 - Channel layer: in-memory (fine for one process; use Redis/`channels-redis` if you scale workers)
 - Database: SQLite (`gps_tracker/db.sqlite3`); not required for live tracking
+- Also you can change the center point of the map and add your own offline OSM tails
 
 `tracker/serial_reader.py` is an older in-process serial helper. The working path used here is `websocket_client.py`.
 
 ## License
 
-Use and adapt freely for your own tracking setup. Keep the Arduino NMEA comment attribution if you redistribute that sketch.
+This project is licensed under the MIT License.
+You are free to use, modify, and distribute this project, provided that the original copyright notice and license are retained.
